@@ -1,0 +1,24 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Virtual environment
+venv/
+
+# Data files
+*.xls
+*.xlsx
+*.csv
+
+# Logs / OS junk
+.DS_Store
+*.log
+
+# Gradio
+gradio_cached_examples/
+
+# VS Code
+.vscode/
