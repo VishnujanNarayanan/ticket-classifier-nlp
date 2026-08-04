@@ -254,13 +254,6 @@ jupyter notebook           # edit and run
 ruff check .               # ruff is pinned in requirements.txt
 ```
 
-There is no test suite and no CI configuration in this repository.
-
-## Testing
-
-No automated tests exist. Verification is manual: the classification reports printed in the
-training cell, and the sample prediction in the inference cell.
-
 ## Limitations
 
 - **Issue-type accuracy of 1.00 is not a credible generalisation estimate.** Every class scores
