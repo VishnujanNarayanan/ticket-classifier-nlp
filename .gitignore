@@ -22,3 +22,6 @@ gradio_cached_examples/
 
 # VS Code
 .vscode/
+
+# WSL/Windows download markers
+*:Zone.Identifier
