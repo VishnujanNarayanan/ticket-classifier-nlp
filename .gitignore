@@ -28,3 +28,11 @@ gradio_cached_examples/
 
 # Local SQLite database built by tickets_db.py
 tickets.db
+
+# Trained model artifacts — rebuilt with `python train.py`, shipped to the Space
+artifacts/
+
+# Resume extraction material — personal career data, never committed
+bullet_extract_latest.yaml
+bullet_extract_[0-9]*.yaml
+resume_extract*.yaml

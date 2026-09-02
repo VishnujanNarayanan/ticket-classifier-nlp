@@ -49,6 +49,9 @@ The result is a single `predict_ticket(text)` call that turns one string into a 
 
 - A SQLite storage layer: the spreadsheet export is loaded once into a `tickets` table, and the
   training set is selected with SQL (`sql/clean_tickets.sql`) rather than rebuilt in pandas.
+- One shared feature pipeline (`pipeline.py`) used by training, inference and the notebook, so a
+  served prediction is built by the same code path the models were fitted on.
+- Persisted artifacts (`train.py` → `artifacts/*.joblib`) so inference never retrains.
 - Text normalisation with POS-aware lemmatisation (NLTK `WordNetLemmatizer` + `pos_tag`).
 - Rule-based entity extraction: products, dates, and complaint keywords.
 - Handcrafted signal features: VADER sentiment, ticket length, character length, exclamation
@@ -133,18 +136,46 @@ A perfect score is a finding about the dataset, not the model — see [Limitatio
 Best-of-sweep accuracy is **0.357**, against a majority-class baseline of 0.381 (48 Medium of
 126). Urgency is not recoverable from these features; this is reported rather than hidden.
 
+## A correctness fix worth calling out
+
+The original notebook built its feature vector twice: column by column during training, and
+again by hand inside `predict_ticket`. The two constructions disagreed in two ways.
+
+| | Training | Old `predict_ticket` |
+|---|---|---|
+| Column order | `num_products … has_complaint`, complaint flags, then `ticket_length … char_length` | `ticket_length … char_length` **first**, then `num_products …` |
+| `MinMaxScaler` | applied | **never applied** |
+
+So every served prediction — the Gradio demo and the example in this README included — was
+computed from a mis-assembled, unscaled vector. The models were fine; the serving path was not.
+
+`pipeline.FEATURE_ORDER` is now the single definition of column order, and `build_matrix()`
+applies the scaler on both paths. `tests/test_pipeline.py` guards it, including a regression test
+that feeds the columns in reversed order and asserts the matrix is unchanged. Sanity check after
+the fix: predictions agree with the stored label on 40 of 40 known tickets.
+
+This does change one documented output — the sample ticket below now returns urgency **High**
+rather than **Medium**. The new answer is what the trained model actually says.
+
 ## Project Structure
 
 ```
 ticket-classifier-nlp/
 ├── .github/workflows/ci.yml              # Lint, tests, and a notebook parse check
 ├── Task1_Ticket_Classifier_Final.ipynb   # Pipeline: prep, features, training, Gradio app
+├── app.py                                 # Gradio app, loads artifacts (Hugging Face entry point)
+├── pipeline.py                            # Shared feature pipeline — FEATURE_ORDER lives here
+├── predictor.py                           # predict_ticket() over the persisted artifacts
+├── train.py                               # Trains both models, writes artifacts/
+├── deploy_space.py                        # Publishes the app to a Hugging Face Space
 ├── tickets_db.py                          # SQLite load + SQL-backed dataset access
 ├── sql/
 │   ├── schema.sql                         # tickets table and its indexes
 │   ├── clean_tickets.sql                  # the modelling set, defined in SQL
 │   └── class_distribution.sql             # class balance, GROUP BY + window function
-├── tests/test_tickets_db.py               # pytest suite over a synthetic export
+├── tests/
+│   ├── test_tickets_db.py                 # SQL cleaning rules, over a synthetic export
+│   └── test_pipeline.py                   # Feature order, scaling, entity rules
 ├── pyproject.toml                         # ruff and pytest configuration
 ├── requirements.txt                       # Pinned dependencies
 └── README.md
@@ -303,7 +334,7 @@ and 3.11:
 | Step | What it checks |
 |---|---|
 | `ruff check .` | Lint across the Python modules and the notebook cells |
-| `pytest -q` | The six tests over `sql/clean_tickets.sql`'s filtering and de-duplication rules |
+| `pytest -q` | 14 tests: the SQL cleaning rules, and the feature pipeline's column order and scaling |
 | notebook parse | The `.ipynb` is still valid JSON after an edit |
 
 The tests build their own synthetic spreadsheet in a temporary directory, so CI never needs
@@ -321,16 +352,16 @@ the real dataset — which is gitignored and not in the repository.
   name.
 - **Entity extraction is a fixed vocabulary.** Five products and eight complaint keywords,
   matched literally. Inflected forms (`crashed`) and unlisted products are missed.
-- **Nothing is persisted.** Models, the vectoriser, and the scaler live only in kernel memory;
-  restarting the notebook requires retraining. The *data* is now persisted in SQLite, but the
-  trained artefacts are not.
-- **`predict_ticket` rebuilds its feature vector by hand**, in column order that must be kept in
-  sync with training manually, and constructs a new VADER analyser on every call.
+- **Urgency prediction still does not work.** Fixing the serving path did not make the label
+  learnable — it was never a serving problem. Best sweep accuracy is 0.357 against a 0.381
+  majority-class baseline.
+- **Entity extraction is still a fixed vocabulary.** Inflected forms (`crashed`) and unlisted
+  products are missed; lemmatising before keyword matching remains open.
 
 ## Roadmap
 
-- Persist the vectoriser, scaler, and models with `joblib` so inference does not require training.
-- Replace the hand-built inference feature vector with a shared `sklearn` `Pipeline`.
+- ~~Persist the vectoriser, scaler, and models with `joblib`.~~ Done — `train.py`.
+- ~~Replace the hand-built inference feature vector with a shared path.~~ Done — `pipeline.py`.
 - Investigate the issue-type leakage — inspect near-duplicate ticket bodies across the split.
 - Lemmatise before complaint-keyword matching so inflected forms are caught.
 - Try stronger urgency models (gradient boosting, linear SVM) and class-aware metrics before
@@ -353,3 +384,15 @@ without warranty.
   <a href="https://www.linkedin.com/in/vishnujan-narayanan"><img alt="LinkedIn" src="https://img.shields.io/badge/LinkedIn-Vishnujan_Narayanan-0A66C2?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0yMC40NDcgMjAuNDUyaC0zLjU1NHYtNS41NjljMC0xLjMyOC0uMDI3LTMuMDM3LTEuODUyLTMuMDM3LTEuODUzIDAtMi4xMzYgMS40NDUtMi4xMzYgMi45Mzl2NS42NjdIOS4zNTFWOWgzLjQxNHYxLjU2MWguMDQ2Yy40NzctLjkgMS42MzctMS44NSAzLjM3LTEuODUgMy42MDEgMCA0LjI2NyAyLjM3IDQuMjY3IDUuNDU1djYuMjg2ek01LjMzNyA3LjQzM2MtMS4xNDQgMC0yLjA2My0uOTI2LTIuMDYzLTIuMDY1IDAtMS4xMzguOTItMi4wNjMgMi4wNjMtMi4wNjMgMS4xNCAwIDIuMDY0LjkyNSAyLjA2NCAyLjA2MyAwIDEuMTM5LS45MjUgMi4wNjUtMi4wNjQgMi4wNjV6bTEuNzgyIDEzLjAxOUgzLjU1NVY5aDMuNTY0djExLjQ1MnpNMjIuMjI1IDBIMS43NzFDLjc5MiAwIDAgLjc3NCAwIDEuNzI5djIwLjU0MkMwIDIzLjIyNy43OTIgMjQgMS43NzEgMjRoMjAuNDUxQzIzLjIgMjQgMjQgMjMuMjI3IDI0IDIyLjI3MVYxLjcyOUMyNCAuNzc0IDIzLjIgMCAyMi4yMjIgMGguMDAzeiIvPjwvc3ZnPg%3D%3D&logoColor=white&style=for-the-badge"/></a>
   <a href="https://substack.com/@vishnujannarayanan"><img alt="Substack" src="https://img.shields.io/badge/Substack-@vishnujannarayanan-FF6719?logo=substack&logoColor=white&style=for-the-badge"/></a>
 </p>
+
+## Deploying
+
+```bash
+huggingface-cli login                                        # write token, once
+python train.py ai_dev_assignment_tickets_complex_1000.xlsx  # writes artifacts/
+python deploy_space.py                                       # publishes the Space
+```
+
+The Space receives `app.py`, `pipeline.py`, `predictor.py`, `requirements-space.txt` and the
+trained artifacts — never the ticket spreadsheet. It loads the persisted models and serves
+immediately rather than retraining on a cold start.
