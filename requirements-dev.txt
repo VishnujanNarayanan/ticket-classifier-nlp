@@ -1,0 +1,5 @@
+# Development and CI tooling. Installs the runtime set too.
+-r requirements.txt
+ruff==0.12.0
+pytest==8.3.5
+matplotlib==3.7.5
