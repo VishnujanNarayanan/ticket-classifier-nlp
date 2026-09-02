@@ -1,0 +1,14 @@
+{
+  "tickets": 629,
+  "features": 1583,
+  "issue_accuracy": 1.0,
+  "urgency_sweep": {
+    "3": 0.3254,
+    "5": 0.3492,
+    "7": 0.3254,
+    "10": 0.3016,
+    "15": 0.3571
+  },
+  "urgency_best_k": 15,
+  "urgency_best_accuracy": 0.3571
+}

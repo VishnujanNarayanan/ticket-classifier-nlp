@@ -163,11 +163,13 @@ rather than **Medium**. The new answer is what the trained model actually says.
 ticket-classifier-nlp/
 ├── .github/workflows/ci.yml              # Lint, tests, and a notebook parse check
 ├── Task1_Ticket_Classifier_Final.ipynb   # Pipeline: prep, features, training, Gradio app
-├── app.py                                 # Gradio app, loads artifacts (Hugging Face entry point)
+├── streamlit_app.py                       # Streamlit UI — the deployed entry point
+├── app.py                                 # Gradio UI, same predictions, for local use
+├── artifacts/                             # Committed compressed models (~0.3 MB)
 ├── pipeline.py                            # Shared feature pipeline — FEATURE_ORDER lives here
 ├── predictor.py                           # predict_ticket() over the persisted artifacts
 ├── train.py                               # Trains both models, writes artifacts/
-├── deploy_space.py                        # Publishes the app to a Hugging Face Space
+├── deploy_space.py                        # Hugging Face Space publisher (needs PRO — see Deploying)
 ├── tickets_db.py                          # SQLite load + SQL-backed dataset access
 ├── sql/
 │   ├── schema.sql                         # tickets table and its indexes
@@ -387,12 +389,39 @@ without warranty.
 
 ## Deploying
 
+The app is deployed on **Streamlit Community Cloud**, which serves straight from this
+repository. `streamlit_app.py` is the entry point and `requirements-deploy.txt` the runtime
+dependency list.
+
+Two UI files exist deliberately, and neither duplicates any logic — both are thin wrappers
+over `predictor.predict_ticket`:
+
+| File | Used by |
+|---|---|
+| `streamlit_app.py` | The deployed public demo |
+| `app.py` | Local Gradio use, matching the notebook's final cell |
+
+### Why the artifacts are committed
+
+`train.py` writes them with `joblib(compress=3)`, which takes the bundle from ~7.2 MB to
+**~0.3 MB** — small enough to keep in git. That is what lets a host deploying from GitHub
+load the models instead of retraining on every cold start, and it means the ticket
+spreadsheet never has to leave your machine.
+
+Rebuild them after any pipeline change:
+
 ```bash
-huggingface-cli login                                        # write token, once
-python train.py ai_dev_assignment_tickets_complex_1000.xlsx  # writes artifacts/
-python deploy_space.py                                       # publishes the Space
+python train.py ai_dev_assignment_tickets_complex_1000.xlsx
 ```
 
-The Space receives `app.py`, `pipeline.py`, `predictor.py`, `requirements-space.txt` and the
-trained artifacts — never the ticket spreadsheet. It loads the persisted models and serves
-immediately rather than retraining on a cold start.
+### Hugging Face Spaces
+
+`deploy_space.py` still works and is kept for reference, but Hugging Face now requires a
+**PRO subscription** to host Gradio or Docker Spaces — only static Spaces are free. Running
+it on a free account returns `402 Payment Required`. With PRO:
+
+```bash
+huggingface-cli login
+python train.py ai_dev_assignment_tickets_complex_1000.xlsx
+python deploy_space.py
+```

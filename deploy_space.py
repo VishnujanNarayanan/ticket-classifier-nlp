@@ -1,5 +1,10 @@
 """Publish the Gradio app to a Hugging Face Space.
 
+NOTE: Hugging Face now requires a PRO subscription to host Gradio or Docker Spaces --
+only static Spaces are free -- so this returns 402 Payment Required on a free account.
+The live deployment uses Streamlit Community Cloud instead (see streamlit_app.py and the
+README). This script is kept because it works as-is the moment an account has PRO.
+
     huggingface-cli login          # once, needs a WRITE token
     python train.py ai_dev_assignment_tickets_complex_1000.xlsx
     python deploy_space.py         # optional: --space-id user/name
