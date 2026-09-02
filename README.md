@@ -395,6 +395,13 @@ repository. `streamlit_app.py` is the entry point. Streamlit Cloud installs `req
 only that file, so it holds the runtime set; development tooling lives in
 `requirements-dev.txt`.
 
+> **Select Python 3.11 under "Advanced settings" when creating the app.** Streamlit Cloud
+> defaults to the newest interpreter. `scikit-learn==1.3.2` — pinned because it is the
+> version that pickled `artifacts/*.joblib` — publishes wheels for cp38 to cp312 only, so
+> on Python 3.13+ pip tries to compile it from source and the Cython build fails with
+> `'float64_t' is not a type identifier`. The Python version cannot be changed after an
+> app is created; delete it and redeploy.
+
 Two UI files exist deliberately, and neither duplicates any logic — both are thin wrappers
 over `predictor.predict_ticket`:
 
