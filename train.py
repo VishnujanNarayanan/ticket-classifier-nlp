@@ -60,11 +60,14 @@ def train(excel_path: str | None = None, db_path=DEFAULT_DB, out_dir: Path = ART
         if score > best_score:
             best_score, best_model, best_k = score, knn, k
 
+    # compress=3 takes the bundle from ~7.2 MB to ~0.3 MB — small enough to commit,
+    # which is what lets a host that deploys straight from GitHub serve without
+    # retraining. The KNN shrinks most, since it stores its training data.
     out_dir.mkdir(exist_ok=True)
-    joblib.dump(tfidf, out_dir / "tfidf.joblib")
-    joblib.dump(scaler, out_dir / "scaler.joblib")
-    joblib.dump(issue_model, out_dir / "issue_model.joblib")
-    joblib.dump(best_model, out_dir / "urgency_model.joblib")
+    joblib.dump(tfidf, out_dir / "tfidf.joblib", compress=3)
+    joblib.dump(scaler, out_dir / "scaler.joblib", compress=3)
+    joblib.dump(issue_model, out_dir / "issue_model.joblib", compress=3)
+    joblib.dump(best_model, out_dir / "urgency_model.joblib", compress=3)
 
     metrics = {
         "tickets": len(frame),
