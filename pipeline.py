@@ -21,7 +21,14 @@ from nltk.corpus import stopwords, wordnet
 from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.stem import WordNetLemmatizer
 
-NLTK_PACKAGES = ("punkt", "averaged_perceptron_tagger", "stopwords", "wordnet", "vader_lexicon")
+#: NLTK 3.9 renamed two resources ("punkt" -> "punkt_tab", and the POS tagger gained an
+#: "_eng" variant). Both spellings are requested so the pipeline works on either version;
+#: a name the installed NLTK does not know is simply skipped.
+NLTK_PACKAGES = (
+    "punkt", "punkt_tab",
+    "averaged_perceptron_tagger", "averaged_perceptron_tagger_eng",
+    "stopwords", "wordnet", "omw-1.4", "vader_lexicon",
+)
 
 PRODUCT_LIST = ["laptop", "phone", "charger", "headphones", "battery"]
 COMPLAINT_KEYWORDS = [
@@ -45,7 +52,10 @@ _sentiment = None
 def ensure_nltk() -> None:
     """Download the corpora the pipeline needs, quietly and only once."""
     for pkg in NLTK_PACKAGES:
-        nltk.download(pkg, quiet=True)
+        try:
+            nltk.download(pkg, quiet=True)
+        except Exception:  # noqa: BLE001 - an unknown name on an older NLTK is fine
+            pass
 
 
 def _stopwords() -> set:
