@@ -12,6 +12,8 @@
   <img alt="pandas" src="https://img.shields.io/badge/pandas-2.0-150458?logo=pandas&logoColor=white"/>
   <img alt="Gradio" src="https://img.shields.io/badge/Gradio-4.44-FF7C00?logo=gradio&logoColor=white"/>
   <img alt="Jupyter" src="https://img.shields.io/badge/Jupyter-notebook-F37626?logo=jupyter&logoColor=white"/>
+  <img alt="SQLite" src="https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white"/>
+  <img alt="CI" src="https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white"/>
   <img alt="License" src="https://img.shields.io/badge/License-MIT-750014"/>
   <br>
   <a href="https://vishnujan-narayanan.vercel.app/"><img alt="Portfolio" src="https://img.shields.io/badge/Portfolio-vishnujan--narayanan.vercel.app-3b5998?logo=googlechrome&logoColor=white&style=for-the-badge"/></a>
@@ -45,6 +47,8 @@ The result is a single `predict_ticket(text)` call that turns one string into a 
 
 ## Features
 
+- A SQLite storage layer: the spreadsheet export is loaded once into a `tickets` table, and the
+  training set is selected with SQL (`sql/clean_tickets.sql`) rather than rebuilt in pandas.
 - Text normalisation with POS-aware lemmatisation (NLTK `WordNetLemmatizer` + `pos_tag`).
 - Rule-based entity extraction: products, dates, and complaint keywords.
 - Handcrafted signal features: VADER sentiment, ticket length, character length, exclamation
@@ -61,7 +65,10 @@ independently — there is no shared representation learning between them.
 
 ```mermaid
 flowchart TB
-    Raw["Raw ticket text"] --> Clean["Normalise<br/>lowercase, strip punctuation,<br/>stopwords, POS lemmatisation"]
+    Xlsx["Spreadsheet export"] --> DB[("SQLite<br/>tickets table")]
+    DB --> SQL["sql/clean_tickets.sql<br/>drop unlabelled, de-duplicate bodies<br/>ROW_NUMBER() window function"]
+    SQL --> Raw["Raw ticket text"]
+    Raw --> Clean["Normalise<br/>lowercase, strip punctuation,<br/>stopwords, POS lemmatisation"]
     Raw --> Ents["Rule-based extraction<br/>products / dates / complaints"]
     Raw --> Meta["Signal features<br/>VADER sentiment, lengths, !/?/CAPS"]
 
@@ -130,13 +137,42 @@ Best-of-sweep accuracy is **0.357**, against a majority-class baseline of 0.381 
 
 ```
 ticket-classifier-nlp/
-├── Task1_Ticket_Classifier_Final.ipynb   # Full pipeline: prep, features, training, Gradio app
+├── .github/workflows/ci.yml              # Lint, tests, and a notebook parse check
+├── Task1_Ticket_Classifier_Final.ipynb   # Pipeline: prep, features, training, Gradio app
+├── tickets_db.py                          # SQLite load + SQL-backed dataset access
+├── sql/
+│   ├── schema.sql                         # tickets table and its indexes
+│   ├── clean_tickets.sql                  # the modelling set, defined in SQL
+│   └── class_distribution.sql             # class balance, GROUP BY + window function
+├── tests/test_tickets_db.py               # pytest suite over a synthetic export
+├── pyproject.toml                         # ruff and pytest configuration
 ├── requirements.txt                       # Pinned dependencies
 └── README.md
 ```
 
-The notebook is self-contained — preprocessing, feature construction, both models, the
-inference function, and the Gradio launch all live in it.
+The modelling pipeline is still one notebook — preprocessing, feature construction, both
+models, the inference function, and the Gradio launch. What moved out of it is data access:
+loading and cleaning now live in `tickets_db.py` and `sql/`, where they can be tested.
+
+### The SQL layer
+
+`sql/clean_tickets.sql` is the single definition of "a usable ticket":
+
+- rows without ticket text, without an issue type, or without an urgency level are dropped;
+- duplicate ticket bodies collapse to their lowest `ticket_id`, chosen deterministically with
+  a `ROW_NUMBER() OVER (PARTITION BY ticket_text ORDER BY ticket_id)` window function.
+
+Both rules used to be `dropna` and `drop_duplicates` calls inside notebook cell 2. Moving them
+into SQL changes no result — the same 629 rows survive — but they are now reusable and covered
+by tests.
+
+```python
+from tickets_db import build_database, load_clean_tickets, class_distribution
+
+build_database("ai_dev_assignment_tickets_complex_1000.xlsx")   # 1000 raw rows
+df = load_clean_tickets()                                        # 629 usable tickets
+class_distribution()                                             # counts per issue x urgency
+```
 
 ## Installation
 
@@ -246,15 +282,32 @@ notebook:
 | `openpyxl` | Reading the ticket spreadsheet export |
 | `gradio` | Browser interface for live prediction |
 | `matplotlib` | Plotting during exploration |
+| `pytest` | Tests for the SQL layer |
+
+SQLite needs no dependency — it ships with Python as `sqlite3`.
 
 ## Development
 
-The project is a single notebook, so the workflow is:
-
 ```bash
-jupyter notebook           # edit and run
-ruff check .               # ruff is pinned in requirements.txt
+jupyter notebook           # edit and run the pipeline
+ruff check .               # lint (config in pyproject.toml)
+pytest -q                  # tests for the SQL layer
+python tickets_db.py       # rebuild the database and print the class distribution
 ```
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request to `main`, against Python 3.8
+and 3.11:
+
+| Step | What it checks |
+|---|---|
+| `ruff check .` | Lint across the Python modules and the notebook cells |
+| `pytest -q` | The six tests over `sql/clean_tickets.sql`'s filtering and de-duplication rules |
+| notebook parse | The `.ipynb` is still valid JSON after an edit |
+
+The tests build their own synthetic spreadsheet in a temporary directory, so CI never needs
+the real dataset — which is gitignored and not in the repository.
 
 ## Limitations
 
@@ -269,7 +322,8 @@ ruff check .               # ruff is pinned in requirements.txt
 - **Entity extraction is a fixed vocabulary.** Five products and eight complaint keywords,
   matched literally. Inflected forms (`crashed`) and unlisted products are missed.
 - **Nothing is persisted.** Models, the vectoriser, and the scaler live only in kernel memory;
-  restarting the notebook requires retraining.
+  restarting the notebook requires retraining. The *data* is now persisted in SQLite, but the
+  trained artefacts are not.
 - **`predict_ticket` rebuilds its feature vector by hand**, in column order that must be kept in
   sync with training manually, and constructs a new VADER analyser on every call.
 

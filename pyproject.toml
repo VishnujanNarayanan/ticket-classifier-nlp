@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+exclude = ["venv", ".ipynb_checkpoints", "flagged"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# Notebook cells are written to be run top to bottom in a kernel, not imported:
+# mid-cell imports, one-line conditionals in a POS-tag mapper, long Gradio label
+# strings, and a lambda closing over a loop variable that pandas evaluates
+# eagerly are all normal there and are not worth reshaping the notebook for.
+"*.ipynb" = ["E402", "E501", "E701", "B023"]
