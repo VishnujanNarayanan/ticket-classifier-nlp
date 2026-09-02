@@ -25,3 +25,6 @@ gradio_cached_examples/
 
 # WSL/Windows download markers
 *:Zone.Identifier
+
+# Local SQLite database built by tickets_db.py
+tickets.db
