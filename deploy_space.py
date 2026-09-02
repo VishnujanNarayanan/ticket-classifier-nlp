@@ -23,13 +23,13 @@ ROOT = Path(__file__).resolve().parent
 ARTIFACTS = ROOT / "artifacts"
 DEFAULT_SPACE = "ticket-classifier-nlp"
 
-#: Uploaded as-is. requirements-space.txt is renamed on the way up, because a Space
-#: installs from a file literally called requirements.txt.
+#: Uploaded as-is. requirements.txt is the runtime set (dev tooling lives in
+#: requirements-dev.txt), so it is what a Space should install.
 FILES = {
     "app.py": "app.py",
     "pipeline.py": "pipeline.py",
     "predictor.py": "predictor.py",
-    "requirements-space.txt": "requirements.txt",
+    "requirements.txt": "requirements.txt",
 }
 ARTIFACT_FILES = ["tfidf.joblib", "scaler.joblib", "issue_model.joblib",
                   "urgency_model.joblib", "metrics.json"]

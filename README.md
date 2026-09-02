@@ -179,7 +179,8 @@ ticket-classifier-nlp/
 │   ├── test_tickets_db.py                 # SQL cleaning rules, over a synthetic export
 │   └── test_pipeline.py                   # Feature order, scaling, entity rules
 ├── pyproject.toml                         # ruff and pytest configuration
-├── requirements.txt                       # Pinned dependencies
+├── requirements.txt                       # Runtime deps (what the deploy installs)
+├── requirements-dev.txt                   # + ruff, pytest, matplotlib
 └── README.md
 ```
 
@@ -227,7 +228,7 @@ env\Scripts\activate         # Windows
 Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt     # runtime + ruff, pytest
 ```
 
 Download the NLTK corpora used at runtime:
@@ -390,8 +391,9 @@ without warranty.
 ## Deploying
 
 The app is deployed on **Streamlit Community Cloud**, which serves straight from this
-repository. `streamlit_app.py` is the entry point and `requirements-deploy.txt` the runtime
-dependency list.
+repository. `streamlit_app.py` is the entry point. Streamlit Cloud installs `requirements.txt` and
+only that file, so it holds the runtime set; development tooling lives in
+`requirements-dev.txt`.
 
 Two UI files exist deliberately, and neither duplicates any logic — both are thin wrappers
 over `predictor.predict_ticket`:
