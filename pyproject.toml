@@ -8,6 +8,10 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# tickets_db.py lives at the repo root and the tests import it by name. Without
+# this, a bare `pytest` invocation cannot find it (only `python -m pytest` works,
+# because that form puts the cwd on sys.path) — which is exactly how CI failed.
+pythonpath = ["."]
 
 [tool.ruff.lint.per-file-ignores]
 # Notebook cells are written to be run top to bottom in a kernel, not imported:
