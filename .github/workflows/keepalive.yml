@@ -26,23 +26,28 @@ jobs:
           APP_URL: https://ticket-classifier-demonstration.streamlit.app
         run: |
           set -u
-          # /healthz answers 200 even while the app is private, so it tells us the
-          # container is alive.
-          health=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$APP_URL/healthz" || echo 000)
-          echo "healthz: $health"
+          JAR=$(mktemp)
+          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36'
 
-          # The root answers 200 only when the app is PUBLIC. A 303 means it is
-          # redirecting anonymous visitors to a login page, so the link is useless
-          # to anyone the resume points at -- and this ping is not keeping it warm,
-          # because it never reaches the app.
-          root=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$APP_URL/" || echo 000)
-          echo "root:    $root"
+          # Streamlit Cloud runs an anonymous session handshake before serving a
+          # PUBLIC app: the root 303s to share.streamlit.io/-/auth/app, which sets a
+          # cookie and redirects back. A bare `curl` sees only that first 303 and
+          # looks exactly like a private app -- which is how an earlier version of
+          # this workflow reported a public app as private. Carry cookies through
+          # the redirect chain and read the FINAL status instead.
+          health=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$APP_URL/healthz" || echo 000)
+          root=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 60 \
+                   -c "$JAR" -b "$JAR" -A "$UA" "$APP_URL/" || echo 000)
+          rm -f "$JAR"
+          echo "healthz: $health"
+          echo "root:    $root (after redirects, with cookies)"
 
           if [ "$health" != "200" ]; then
             echo "::error::App is not responding (healthz=$health). It may be asleep or the deploy is broken."
             exit 1
           fi
           if [ "$root" != "200" ]; then
-            echo "::warning::App is not publicly viewable (root=$root). Set Sharing to public in Streamlit Cloud, or the demo link cannot be opened by anyone else."
+            echo "::error::App did not serve after the session handshake (root=$root). Check the deploy and the sharing setting."
+            exit 1
           fi
-          echo "Demo is awake."
+          echo "Demo is awake and publicly reachable."
