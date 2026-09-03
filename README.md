@@ -23,6 +23,10 @@
 </p>
 
 <p align="center">
+  <a href="https://ticket-classifier-demonstration.streamlit.app/"><img alt="Live demo" src="https://img.shields.io/badge/▶_Live_demo-Try_it_now-FF4B4B?logo=streamlit&logoColor=white&style=for-the-badge"/></a>
+</p>
+
+<p align="center">
   🎯 <a href="#why-this-project-exists">Why</a> ·
   🧩 <a href="#architecture">Architecture</a> ·
   📊 <a href="#results">Results</a> ·
@@ -33,6 +37,12 @@
 </p>
 
 ---
+
+## Live demo
+
+**<https://ticket-classifier-demonstration.streamlit.app/>** — paste a ticket and see the
+prediction. Hosted on Streamlit Community Cloud; a scheduled workflow pings it twice a day
+so it does not fall asleep.
 
 ## Why this project exists
 
@@ -339,6 +349,9 @@ and 3.11:
 | `ruff check .` | Lint across the Python modules and the notebook cells |
 | `pytest -q` | 14 tests: the SQL cleaning rules, and the feature pipeline's column order and scaling |
 | notebook parse | The `.ipynb` is still valid JSON after an edit |
+
+A second workflow, `keepalive.yml`, pings the demo twice a day so Streamlit Cloud does not
+put it to sleep. It also warns if the app stops being publicly viewable.
 
 The tests build their own synthetic spreadsheet in a temporary directory, so CI never needs
 the real dataset — which is gitignored and not in the repository.

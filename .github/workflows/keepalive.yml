@@ -1,0 +1,48 @@
+name: Keep the demo awake
+
+# Streamlit Community Cloud puts an app to sleep after about a week without
+# traffic, and a sleeping app shows a "get this app back up" splash instead of
+# the demo — which is the worst thing a recruiter following the link can hit.
+# A twice-daily request is enough to keep it warm.
+#
+# NOTE: GitHub disables scheduled workflows on a repository with no activity for
+# 60 days. If the demo starts sleeping again, check that this workflow is still
+# enabled under the Actions tab.
+
+on:
+  schedule:
+    - cron: "0 6,18 * * *"   # 06:00 and 18:00 UTC
+  workflow_dispatch:          # and on demand from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the app
+        env:
+          APP_URL: https://ticket-classifier-demonstration.streamlit.app
+        run: |
+          set -u
+          # /healthz answers 200 even while the app is private, so it tells us the
+          # container is alive.
+          health=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$APP_URL/healthz" || echo 000)
+          echo "healthz: $health"
+
+          # The root answers 200 only when the app is PUBLIC. A 303 means it is
+          # redirecting anonymous visitors to a login page, so the link is useless
+          # to anyone the resume points at -- and this ping is not keeping it warm,
+          # because it never reaches the app.
+          root=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$APP_URL/" || echo 000)
+          echo "root:    $root"
+
+          if [ "$health" != "200" ]; then
+            echo "::error::App is not responding (healthz=$health). It may be asleep or the deploy is broken."
+            exit 1
+          fi
+          if [ "$root" != "200" ]; then
+            echo "::warning::App is not publicly viewable (root=$root). Set Sharing to public in Streamlit Cloud, or the demo link cannot be opened by anyone else."
+          fi
+          echo "Demo is awake."
